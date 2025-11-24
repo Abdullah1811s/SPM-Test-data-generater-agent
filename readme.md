@@ -29,7 +29,7 @@ It supports **dynamic schema detection**, **edge cases**, **nested objects**, **
 1. Clone the repository:
 
 ```bash
-git clone <repository_url>
+git clone https://github.com/Abdullah1811s/SPM-Test-data-generater-agent.git
 cd test-data-agent
 ````
 
