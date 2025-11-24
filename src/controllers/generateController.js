@@ -1,6 +1,5 @@
 import { faker } from '@faker-js/faker';
 
-
 function detectFieldType(fieldName, ruleType) {
     if (ruleType) return ruleType.toLowerCase();
     const lower = fieldName.toLowerCase();
@@ -29,8 +28,8 @@ function generateFieldValue(fieldName, type, rules = {}, scenario = {}) {
         case 'string': value = faker.person.fullName(); break;
         case 'email': value = rules.domain ? faker.internet.email().replace(/@.+$/, `@${rules.domain}`) : faker.internet.email(); break;
         case 'phone': value = faker.phone.number(); break;
-        case 'company': value = faker.company.name(); break;
-        case 'address': value = faker.location.streetAddress(); break;
+        case 'company': value = rules.nested ? { name: faker.company.name(), industry: faker.company.industry() } : faker.company.name(); break;
+        case 'address': value = rules.nested ? { street: faker.location.streetAddress(), city: faker.location.city(), state: faker.location.state(), country: faker.location.country(), zip: faker.location.zipCode() } : faker.location.streetAddress(); break;
         case 'date':
             if (rules.past) value = faker.date.past().toISOString();
             else if (rules.future) value = faker.date.future().toISOString();
@@ -59,14 +58,13 @@ function generateFieldValue(fieldName, type, rules = {}, scenario = {}) {
 
     if (scenario.edge_cases) {
         const rand = Math.random();
-        if (rand < 0.05) value = null;       
-        else if (rand < 0.1 && typeof value === 'string') value = ''; 
-        else if (rand < 0.12 && typeof value === 'number') value = -value; 
+        if (rand < 0.05) value = null;
+        else if (rand < 0.1 && typeof value === 'string') value = '';
+        else if (rand < 0.12 && typeof value === 'number') value = -value;
     }
 
     return value;
 }
-
 
 export const generateTestData = (req, res) => {
     try {
@@ -81,40 +79,27 @@ export const generateTestData = (req, res) => {
         for (let i = 0; i < count; i++) {
             const item = {};
             for (const field of fields) {
-                let ruleType, ruleOptions;
+                let ruleType, ruleOptions = {};
                 if (rules[field]) {
                     if (Array.isArray(rules[field])) {
                         ruleType = 'enum';
-                        ruleOptions = { choices: rules[field] };
+                        ruleOptions.choices = rules[field];
                     } else if (typeof rules[field] === 'object') {
                         ruleType = rules[field].type || null;
                         ruleOptions = rules[field];
+                        // if count is specified => treat as array
+                        if (rules[field].count) ruleOptions.isArray = true;
                     }
                 }
                 const type = detectFieldType(field, ruleType);
-                item[field] = generateFieldValue(field, type, ruleOptions, { edge_cases: scenarios.includes('edge_cases') });
-            }
 
-            
-            if (scenarios.includes('nested')) {
-                if (fields.some(f => f.toLowerCase().includes('address'))) {
-                    item['address_details'] = {
-                        street: faker.location.streetAddress(),
-                        city: faker.location.city(),
-                        state: faker.location.state(),
-                        country: faker.location.country(),
-                        zip: faker.location.zipCode()
-                    };
+                // Handle array fields
+                if (ruleOptions.isArray) {
+                    const length = ruleOptions.count || faker.number.int({ min: 1, max: 5 });
+                    item[field] = Array.from({ length }, () => generateFieldValue(field, type, ruleOptions, { edge_cases: scenarios.includes('edge_cases') }));
+                } else {
+                    item[field] = generateFieldValue(field, type, ruleOptions, { edge_cases: scenarios.includes('edge_cases') });
                 }
-            }
-
-            
-            if (scenarios.includes('array')) {
-                const arrayFields = Object.keys(rules).filter(f => rules[f]?.isArray);
-                arrayFields.forEach(f => {
-                    const length = rules[f].length ?? faker.number.int({ min: 1, max: 5 });
-                    item[f] = Array.from({ length }, () => generateFieldValue(f, rules[f].type, rules[f]));
-                });
             }
 
             generatedData.push(item);
@@ -122,19 +107,21 @@ export const generateTestData = (req, res) => {
 
         const finalData = existing_data ? existing_data.concat(generatedData) : generatedData;
 
-        
+        // Summary statistics
         const stats = {};
         fields.forEach(f => {
             const values = finalData.map(d => d[f]).filter(v => v !== null && v !== undefined);
-            if (values.length && typeof values[0] === 'number') stats[f] = { min: Math.min(...values), max: Math.max(...values) };
-            else if (values.length && typeof values[0] === 'string') stats[f] = { unique: [...new Set(values)].length };
+            if (values.length) {
+                if (Array.isArray(values[0])) stats[f] = { count_per_item: values[0].length };
+                else if (typeof values[0] === 'number') stats[f] = { min: Math.min(...values), max: Math.max(...values) };
+                else if (typeof values[0] === 'string' || typeof values[0] === 'object') stats[f] = { unique: [...new Set(values.map(v => JSON.stringify(v)))].length };
+            }
         });
 
         res.json({
             message_id: req.body.message_id,
             status: 'success',
             generated_data: finalData,
-            summary: stats
         });
 
     } catch (error) {
