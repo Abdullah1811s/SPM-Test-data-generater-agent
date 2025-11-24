@@ -1,7 +1,7 @@
 
 # Test Data Generator Agent
 
-A **Node.js API** for generating realistic test data for various scenarios using [Faker.js](https://fakerjs.dev/).  
+A **Node.js API** for generating realistic test data for various scenarios.
 It supports **dynamic schema detection**, **edge cases**, **nested objects**, **arrays**, and **custom rules**. Ideal for testing, prototyping, or generating dummy datasets.
 
 ---
