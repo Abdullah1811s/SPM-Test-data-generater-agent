@@ -1,5 +1,25 @@
 import { faker } from '@faker-js/faker';
+import fs from 'fs';
+import path from 'path';
 
+// --- Memory Setup ---
+const shortTermMemory = []; // keeps all generated data in current session
+const LONG_TERM_MEMORY_FILE = path.resolve('./longTermMemory.json');
+let longTermMemory = [];
+
+// Load long-term memory on startup
+if (fs.existsSync(LONG_TERM_MEMORY_FILE)) {
+    const data = fs.readFileSync(LONG_TERM_MEMORY_FILE, 'utf-8');
+    longTermMemory = JSON.parse(data);
+}
+
+// Save new data to long-term memory
+function saveToLongTermMemory(newData) {
+    longTermMemory.push(...newData);
+    fs.writeFileSync(LONG_TERM_MEMORY_FILE, JSON.stringify(longTermMemory, null, 2));
+}
+
+// --- Utility Functions ---
 function detectFieldType(fieldName, ruleType) {
     if (ruleType) return ruleType.toLowerCase();
     const lower = fieldName.toLowerCase();
@@ -56,6 +76,7 @@ function generateFieldValue(fieldName, type, rules = {}, scenario = {}) {
         default: value = faker.word.sample();
     }
 
+    // Edge case injection
     if (scenario.edge_cases) {
         const rand = Math.random();
         if (rand < 0.05) value = null;
@@ -66,6 +87,7 @@ function generateFieldValue(fieldName, type, rules = {}, scenario = {}) {
     return value;
 }
 
+// --- Main Controller ---
 export const generateTestData = (req, res) => {
     try {
         const task = req.body['results/task'];
@@ -87,13 +109,12 @@ export const generateTestData = (req, res) => {
                     } else if (typeof rules[field] === 'object') {
                         ruleType = rules[field].type || null;
                         ruleOptions = rules[field];
-                        // if count is specified => treat as array
                         if (rules[field].count) ruleOptions.isArray = true;
                     }
                 }
                 const type = detectFieldType(field, ruleType);
 
-                // Handle array fields
+                // Array support
                 if (ruleOptions.isArray) {
                     const length = ruleOptions.count || faker.number.int({ min: 1, max: 5 });
                     item[field] = Array.from({ length }, () => generateFieldValue(field, type, ruleOptions, { edge_cases: scenarios.includes('edge_cases') }));
@@ -101,13 +122,19 @@ export const generateTestData = (req, res) => {
                     item[field] = generateFieldValue(field, type, ruleOptions, { edge_cases: scenarios.includes('edge_cases') });
                 }
             }
-
             generatedData.push(item);
         }
 
-        const finalData = existing_data ? existing_data.concat(generatedData) : generatedData;
+        // --- Update Memory ---
+        shortTermMemory.push(...generatedData);
+        saveToLongTermMemory(generatedData);
 
-        // Summary statistics
+        // --- Final Data ---
+        const finalData = existing_data
+            ? existing_data.concat([...shortTermMemory])
+            : [...shortTermMemory];
+
+        // --- Summary ---
         const stats = {};
         fields.forEach(f => {
             const values = finalData.map(d => d[f]).filter(v => v !== null && v !== undefined);
@@ -122,7 +149,9 @@ export const generateTestData = (req, res) => {
             message_id: req.body.message_id,
             status: 'success',
             generated_data: finalData,
-            summary: stats
+            summary: stats,
+            shortTermMemoryCount: shortTermMemory.length,
+            longTermMemoryCount: longTermMemory.length
         });
 
     } catch (error) {
