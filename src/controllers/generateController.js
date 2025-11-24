@@ -122,6 +122,7 @@ export const generateTestData = (req, res) => {
             message_id: req.body.message_id,
             status: 'success',
             generated_data: finalData,
+            summary: stats
         });
 
     } catch (error) {

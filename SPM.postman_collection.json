@@ -1,0 +1,146 @@
+{
+	"info": {
+		"_postman_id": "eb334cd3-8bbe-425d-bdc3-c1cc4806de6d",
+		"name": "SPM",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "39792033"
+	},
+	"item": [
+		{
+			"name": "Health checking",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "https://spm-test-data-generater-agent.vercel.app/health",
+					"protocol": "https",
+					"host": [
+						"spm-test-data-generater-agent",
+						"vercel",
+						"app"
+					],
+					"path": [
+						"health"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "generating test data 1",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n  \"message_id\": \"msg-001\",\r\n  \"sender\": \"frontend\",\r\n  \"recipient\": \"test_data_agent\",\r\n  \"type\": \"task_assignment\",\r\n  \"timestamp\": \"2025-11-24T18:30:00Z\",\r\n  \"results/task\": {\r\n    \"fields\": [\"name\",\"email\",\"age\",\"isActive\"],\r\n    \"count\": 5,\r\n    \"scenarios\": [],\r\n    \"rules\": {},\r\n    \"existing_data\": null\r\n  }\r\n}\r\n",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "https://spm-test-data-generater-agent.vercel.app/generate",
+					"protocol": "https",
+					"host": [
+						"spm-test-data-generater-agent",
+						"vercel",
+						"app"
+					],
+					"path": [
+						"generate"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "generating test data array based",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"message_id\": \"msg-002\",\r\n    \"sender\": \"frontend\",\r\n    \"recipient\": \"test_data_agent\",\r\n    \"type\": \"task_assignment\",\r\n    \"timestamp\": \"2025-11-24T18:35:00Z\",\r\n    \"results/task\": {\r\n        \"fields\": [\r\n            \"name\",\r\n            \"email\",\r\n            \"company\",\r\n            \"address\",\r\n            \"tags\"\r\n        ],\r\n        \"count\": 3,\r\n        \"scenarios\": [\r\n            \"nested\",\r\n            \"array\"\r\n        ],\r\n        \"rules\": {\r\n            \"tags\": {\r\n                \"count\": 4\r\n            }\r\n        },\r\n        \"existing_data\": null\r\n    }\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "https://spm-test-data-generater-agent.vercel.app/generate",
+					"protocol": "https",
+					"host": [
+						"spm-test-data-generater-agent",
+						"vercel",
+						"app"
+					],
+					"path": [
+						"generate"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "generating test data for edge case",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n  \"message_id\": \"msg-003\",\r\n  \"sender\": \"frontend\",\r\n  \"recipient\": \"test_data_agent\",\r\n  \"type\": \"task_assignment\",\r\n  \"timestamp\": \"2025-11-24T18:40:00Z\",\r\n  \"results/task\": {\r\n    \"fields\": [\"name\",\"email\",\"age\",\"isActive\",\"role\"],\r\n    \"count\": 5,\r\n    \"scenarios\": [\"edge_cases\"],\r\n    \"rules\": {\r\n      \"age\": {\"min\": 18, \"max\": 60},\r\n      \"role\": [\"admin\",\"editor\",\"viewer\"],\r\n      \"email\": {\"domain\": \"example.org\"}\r\n    },\r\n    \"existing_data\": null\r\n  }\r\n}\r\n",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "https://spm-test-data-generater-agent.vercel.app/generate",
+					"protocol": "https",
+					"host": [
+						"spm-test-data-generater-agent",
+						"vercel",
+						"app"
+					],
+					"path": [
+						"generate"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "stress test generating alot of data",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n  \"message_id\": \"msg-004\",\r\n  \"sender\": \"frontend\",\r\n  \"recipient\": \"test_data_agent\",\r\n  \"type\": \"task_assignment\",\r\n  \"timestamp\": \"2025-11-24T18:45:00Z\",\r\n  \"results/task\": {\r\n    \"fields\": [\"name\",\"email\",\"age\",\"isActive\",\"role\",\"company\",\"address\",\"tags\"],\r\n    \"count\": 1000,\r\n    \"scenarios\": [\"edge_cases\",\"nested\",\"array\"],\r\n    \"rules\": {\r\n      \"age\": {\"min\": 18, \"max\": 65},\r\n      \"role\": [\"admin\",\"editor\",\"viewer\"],\r\n      \"tags\": {\"count\": 5}\r\n    },\r\n    \"existing_data\": null\r\n  }\r\n}\r\n",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "https://spm-test-data-generater-agent.vercel.app/generate",
+					"protocol": "https",
+					"host": [
+						"spm-test-data-generater-agent",
+						"vercel",
+						"app"
+					],
+					"path": [
+						"generate"
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}
