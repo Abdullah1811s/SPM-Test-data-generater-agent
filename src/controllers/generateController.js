@@ -1,23 +1,8 @@
 import { faker } from '@faker-js/faker';
-import fs from 'fs';
-import path from 'path';
+import { Memory } from '../models/Memory.js';
 
-// --- Memory Setup ---
-const shortTermMemory = []; // keeps all generated data in current session
-const LONG_TERM_MEMORY_FILE = path.resolve('./longTermMemory.json');
-let longTermMemory = [];
-
-// Load long-term memory on startup
-if (fs.existsSync(LONG_TERM_MEMORY_FILE)) {
-    const data = fs.readFileSync(LONG_TERM_MEMORY_FILE, 'utf-8');
-    longTermMemory = JSON.parse(data);
-}
-
-// Save new data to long-term memory
-function saveToLongTermMemory(newData) {
-    longTermMemory.push(...newData);
-    fs.writeFileSync(LONG_TERM_MEMORY_FILE, JSON.stringify(longTermMemory, null, 2));
-}
+// --- Short-term memory ---
+const shortTermMemory = []; // stores session-generated data
 
 // --- Utility Functions ---
 function detectFieldType(fieldName, ruleType) {
@@ -48,8 +33,8 @@ function generateFieldValue(fieldName, type, rules = {}, scenario = {}) {
         case 'string': value = faker.person.fullName(); break;
         case 'email': value = rules.domain ? faker.internet.email().replace(/@.+$/, `@${rules.domain}`) : faker.internet.email(); break;
         case 'phone': value = faker.phone.number(); break;
-        case 'company': value = rules.nested ? { name: faker.company.name(), industry: faker.company.industry() } : faker.company.name(); break;
-        case 'address': value = rules.nested ? { street: faker.location.streetAddress(), city: faker.location.city(), state: faker.location.state(), country: faker.location.country(), zip: faker.location.zipCode() } : faker.location.streetAddress(); break;
+        case 'company': value = faker.company.name(); break;
+        case 'address': value = faker.location.streetAddress(); break;
         case 'date':
             if (rules.past) value = faker.date.past().toISOString();
             else if (rules.future) value = faker.date.future().toISOString();
@@ -76,7 +61,6 @@ function generateFieldValue(fieldName, type, rules = {}, scenario = {}) {
         default: value = faker.word.sample();
     }
 
-    // Edge case injection
     if (scenario.edge_cases) {
         const rand = Math.random();
         if (rand < 0.05) value = null;
@@ -87,12 +71,12 @@ function generateFieldValue(fieldName, type, rules = {}, scenario = {}) {
     return value;
 }
 
-// --- Main Controller ---
-export const generateTestData = (req, res) => {
+// --- Controller ---
+export const generateTestData = async (req, res) => {
     try {
         const task = req.body['results/task'];
         if (!task || !task.fields || !task.count) {
-            return res.status(400).json({ status: 'error', message: 'Invalid request: missing fields or count' });
+            return res.status(400).json({ status: 'error', message: 'Missing fields or count' });
         }
 
         const { fields, count, existing_data, scenarios = [], rules = {} } = task;
@@ -101,48 +85,37 @@ export const generateTestData = (req, res) => {
         for (let i = 0; i < count; i++) {
             const item = {};
             for (const field of fields) {
-                let ruleType, ruleOptions = {};
+                let ruleType, ruleOptions;
                 if (rules[field]) {
                     if (Array.isArray(rules[field])) {
                         ruleType = 'enum';
-                        ruleOptions.choices = rules[field];
+                        ruleOptions = { choices: rules[field] };
                     } else if (typeof rules[field] === 'object') {
                         ruleType = rules[field].type || null;
                         ruleOptions = rules[field];
-                        if (rules[field].count) ruleOptions.isArray = true;
                     }
                 }
                 const type = detectFieldType(field, ruleType);
-
-                // Array support
-                if (ruleOptions.isArray) {
-                    const length = ruleOptions.count || faker.number.int({ min: 1, max: 5 });
-                    item[field] = Array.from({ length }, () => generateFieldValue(field, type, ruleOptions, { edge_cases: scenarios.includes('edge_cases') }));
-                } else {
-                    item[field] = generateFieldValue(field, type, ruleOptions, { edge_cases: scenarios.includes('edge_cases') });
-                }
+                item[field] = generateFieldValue(field, type, ruleOptions, { edge_cases: scenarios.includes('edge_cases') });
             }
             generatedData.push(item);
         }
 
-        // --- Update Memory ---
+        // --- Update Short-Term Memory ---
         shortTermMemory.push(...generatedData);
-        saveToLongTermMemory(generatedData);
 
-        // --- Final Data ---
-        const finalData = existing_data
-            ? existing_data.concat([...shortTermMemory])
-            : [...shortTermMemory];
+        // --- Save to Long-Term Memory (MongoDB) ---
+        await Memory.create({ data: generatedData });
+
+        // --- Combine with existing data if provided ---
+        const finalData = existing_data ? existing_data.concat([...shortTermMemory]) : [...shortTermMemory];
 
         // --- Summary ---
         const stats = {};
         fields.forEach(f => {
             const values = finalData.map(d => d[f]).filter(v => v !== null && v !== undefined);
-            if (values.length) {
-                if (Array.isArray(values[0])) stats[f] = { count_per_item: values[0].length };
-                else if (typeof values[0] === 'number') stats[f] = { min: Math.min(...values), max: Math.max(...values) };
-                else if (typeof values[0] === 'string' || typeof values[0] === 'object') stats[f] = { unique: [...new Set(values.map(v => JSON.stringify(v)))].length };
-            }
+            if (values.length && typeof values[0] === 'number') stats[f] = { min: Math.min(...values), max: Math.max(...values) };
+            else if (values.length && typeof values[0] === 'string') stats[f] = { unique: [...new Set(values)].length };
         });
 
         res.json({
@@ -151,7 +124,7 @@ export const generateTestData = (req, res) => {
             generated_data: finalData,
             summary: stats,
             shortTermMemoryCount: shortTermMemory.length,
-            longTermMemoryCount: longTermMemory.length
+            longTermMemoryCount: await Memory.countDocuments()
         });
 
     } catch (error) {
